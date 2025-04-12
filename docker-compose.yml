@@ -6,4 +6,8 @@ services:
     container_name: telegram-bot
     env_file:
       - .env
+    volumes:
+      - ./main.py:/app/main.py
+      - ./codes_db.txt:/app/codes_db.txt
+      - ./users.txt:/app/users.txt
     restart: unless-stopped 
