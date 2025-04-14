@@ -80,10 +80,15 @@ class UserInDB(User):
     hashed_password: str
 
 # Hardcoded admin user (in production, this should be stored in the database)
+admin_username = os.getenv("ADMIN_USERNAME", "admin")
+admin_password = os.getenv("ADMIN_PASSWORD", "admin")
+password_hash = pwd_context.hash(admin_password)
+logging.info(f"Admin credentials: {admin_username}/{admin_password} (hash: {password_hash[:10]}...)")
+
 fake_users_db = {
-    "admin": {
-        "username": "admin",
-        "hashed_password": pwd_context.hash(os.getenv("ADMIN_PASSWORD", "admin")),
+    admin_username: {
+        "username": admin_username,
+        "hashed_password": password_hash,
         "disabled": False,
     }
 }
@@ -103,9 +108,12 @@ def get_user(db, username: str):
 def authenticate_user(fake_db, username: str, password: str):
     user = get_user(fake_db, username)
     if not user:
+        logging.warning(f"User not found: {username}")
         return False
     if not verify_password(password, user.hashed_password):
+        logging.warning(f"Invalid password for user: {username}")
         return False
+    logging.info(f"Authentication successful for user: {username}")
     return user
 
 def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None):
