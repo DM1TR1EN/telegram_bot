@@ -12,13 +12,13 @@ require_once "CodesGetter.php";
 // }
 
 // создаем переменную бота
-// $tg_bot_api_token = "394374462:AAHZeERtD0vlSDFgU_iPjcPXApmZCcnSUMY";
+// $tg_bot_api_token = "";
 
 // https://t.me/suremasu_bot
-$tg_bot_api_token = "6153894305:AAGf-fXwiGJd7OCU_sI2FV6H4LaZ3M34y-c";
+$tg_bot_api_token = "";
 
 // https://t.me/new_suremasu_bot
-// $tg_bot_api_token = "7464554426:AAF8Yow8jUHoGXl1WefsMVBu3i93cXzZRe8";
+// $tg_bot_api_token = "";
 
 // $bot = new \TelegramBot\Api\BotApi($tg_bot_api_token);
 $bot = new \TelegramBot\Api\Client($tg_bot_api_token);
