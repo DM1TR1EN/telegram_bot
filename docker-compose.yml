@@ -32,22 +32,23 @@ services:
     networks:
       - bot-network
 
-  admin-tools:
+  admin-web:
     build: .
-    container_name: telegram_bot_admin
+    container_name: telegram_bot_web
     env_file:
       - .env
     environment:
       - POSTGRES_HOST=postgres
     volumes:
-      - ./admin_tools.py:/app/admin_tools.py
+      - ./admin_web.py:/app/admin_web.py
+      - ./templates:/app/templates
+    ports:
+      - "5000:5000"
     depends_on:
       - postgres
     networks:
       - bot-network
-    stdin_open: true
-    tty: true
-    command: python admin_tools.py
+    command: uvicorn admin_web:app --host 0.0.0.0 --port 5000 --reload
 
 networks:
   bot-network:
