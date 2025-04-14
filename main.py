@@ -8,6 +8,8 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from dotenv import load_dotenv
 import os
+import asyncpg
+from typing import Optional
 
 # Load environment variables
 load_dotenv()
@@ -30,6 +32,19 @@ OVERVIEW_URL = "https://www.tradingview.com/chart/CL1!/WpLFZtrb-Demonstration-of
 WEBSITE_URL = "https://surema.su"
 ADMIN_CODE = "031213"  # Special code for admin functions
 
+# Database connection pool
+pool: Optional[asyncpg.Pool] = None
+
+async def init_db():
+    global pool
+    pool = await asyncpg.create_pool(
+        user=os.getenv("POSTGRES_USER", "postgres"),
+        password=os.getenv("POSTGRES_PASSWORD", "postgres"),
+        database=os.getenv("POSTGRES_DB", "telegram_bot"),
+        host=os.getenv("POSTGRES_HOST", "localhost"),
+        port=os.getenv("POSTGRES_PORT", "5432")
+    )
+
 # Load codes from file
 def load_codes():
     try:
@@ -38,38 +53,64 @@ def load_codes():
     except FileNotFoundError:
         return ""
 
-# Load users from file
-def load_users():
+# Save user to database
+async def save_user(user_id: int, language: str = 'ru') -> bool:
     try:
-        with open('users.txt', 'r') as file:
-            return [line.strip() for line in file if line.strip()]
-    except FileNotFoundError:
-        return []
-
-# Save user to file
-def save_user(user_id):
-    try:
-        with open('users.txt', 'a') as file:
-            file.write(f"{user_id}\n")
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO users (user_id, language)
+                VALUES ($1, $2)
+                ON CONFLICT (user_id) DO UPDATE
+                SET language = $2
+                """,
+                user_id, language
+            )
         return True
     except Exception as e:
         logging.error(f"Error saving user: {e}")
         return False
 
-# Clear users database
-def clear_users_db():
+# Check if user exists in database
+async def check_user(user_id: int) -> bool:
     try:
-        with open('users.txt', 'w') as file:
-            file.write('')
+        async with pool.acquire() as conn:
+            result = await conn.fetchval(
+                "SELECT has_demo_access FROM users WHERE user_id = $1",
+                user_id
+            )
+            return result if result is not None else False
+    except Exception as e:
+        logging.error(f"Error checking user: {e}")
+        return False
+
+# Update user's demo access status
+async def update_demo_access(user_id: int, has_access: bool) -> bool:
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE users
+                SET has_demo_access = $1,
+                    demo_access_granted_at = CASE WHEN $1 THEN CURRENT_TIMESTAMP ELSE NULL END
+                WHERE user_id = $2
+                """,
+                has_access, user_id
+            )
+        return True
+    except Exception as e:
+        logging.error(f"Error updating demo access: {e}")
+        return False
+
+# Clear users database
+async def clear_users_db() -> bool:
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute("TRUNCATE TABLE users")
         return True
     except Exception as e:
         logging.error(f"Error clearing users database: {e}")
         return False
-
-# Check if user exists in database
-def check_user(user_id):
-    users = load_users()
-    return str(user_id) in users
 
 # Get verification code for specific date
 def get_verification_code(delta_days=3):
@@ -172,7 +213,7 @@ async def handle_demo_access(message: types.Message):
             return
 
         # Check if user already got a code
-        if check_user(user_id):
+        if await check_user(user_id):
             if lang == "ru":
                 await message.answer("Ты уже получал демо доступ!")
             else:
@@ -193,7 +234,9 @@ async def handle_demo_access(message: types.Message):
                 await message.answer("Take the demo access code for 3 days:")
             
             await message.answer(code, reply_markup=builder.as_markup())
-            save_user(user_id)
+            # Save user and set demo access flag
+            await save_user(user_id, lang)
+            await update_demo_access(user_id, True)
         else:
             if lang == "ru":
                 await message.answer("Извините, не удалось найти код для текущей даты.")
@@ -220,7 +263,7 @@ async def handle_admin_clear(message: types.Message):
             await message.answer("У вас нет прав для выполнения этой команды.")
             return
 
-        if clear_users_db():
+        if await clear_users_db():
             await message.answer("Файл users.txt успешно очищен!", reply_markup=get_main_keyboard(lang))
         else:
             await message.answer("Ошибка очистки файла users.txt", reply_markup=get_main_keyboard(lang))
@@ -231,6 +274,9 @@ async def handle_admin_clear(message: types.Message):
 
 # Main function to start the bot
 async def main():
+    # Initialize database connection
+    await init_db()
+    
     # Delete webhook before using polling
     await bot.delete_webhook(drop_pending_updates=True)
     # Start polling

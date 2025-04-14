@@ -1,4 +1,4 @@
-version: '3'
+version: '3.8'
 
 services:
   telegram-bot:
@@ -6,8 +6,52 @@ services:
     container_name: telegram-bot
     env_file:
       - .env
+    environment:
+      - POSTGRES_HOST=postgres
     volumes:
       - ./main.py:/app/main.py
       - ./codes_db.txt:/app/codes_db.txt
-      - ./users.txt:/app/users.txt
-    restart: unless-stopped 
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - bot-network
+
+  postgres:
+    image: postgres:15
+    container_name: telegram_bot_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-telegram_bot}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - bot-network
+
+  admin-tools:
+    build: .
+    container_name: telegram_bot_admin
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=postgres
+    volumes:
+      - ./admin_tools.py:/app/admin_tools.py
+    depends_on:
+      - postgres
+    networks:
+      - bot-network
+    stdin_open: true
+    tty: true
+    command: python admin_tools.py
+
+networks:
+  bot-network:
+    driver: bridge
+
+volumes:
+  postgres_data: 
