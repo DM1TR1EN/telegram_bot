@@ -1,5 +1,5 @@
-# Use Python 3.8 slim image as base
-FROM python:3.8-slim
+# Use Python 3.11 slim image as base
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
@@ -9,6 +9,9 @@ COPY requirements.txt .
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy all files from the current directory to the container
+COPY . .
 
 # Create directory for mounted files
 RUN mkdir -p /app/data
